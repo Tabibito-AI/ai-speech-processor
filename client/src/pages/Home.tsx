@@ -1,27 +1,41 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
+import { useLocation } from "wouter";
 
-/**
- * All content in this page are only for example, delete if unneeded
- * When building pages, remember your instructions in Frontend Workflow, Frontend Best Practices, Design Guide and Common Pitfalls
- */
 export default function Home() {
-  // The userAuth hooks provides authentication state
-  // To implement login/logout functionality, simply call logout() or redirect to getLoginUrl()
-  let { user, loading, error, isAuthenticated, logout } = useAuth();
-
-  // If theme is switchable in App.tsx, we can implement theme toggling like this:
-  // const { theme, toggleTheme } = useTheme();
-
-  // Use APP_LOGO (as image src) and APP_TITLE if needed
+  const { user, loading, error, isAuthenticated, logout } = useAuth();
+  const [, setLocation] = useLocation();
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <main>
-        Example Page
-        <Button variant="default">Example Button</Button>
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 to-indigo-50">
+      <header className="bg-white shadow-md p-6">
+        <h1 className="text-3xl font-bold text-gray-800">{APP_TITLE}</h1>
+        <p className="text-gray-600">
+          AI-powered speech transcription, translation, and summarization
+        </p>
+      </header>
+      <main className="flex-1 p-8">
+        <div className="max-w-2xl mx-auto">
+          <h2 className="text-2xl font-bold mb-6 text-gray-800">
+            Welcome to AI Speech Processor
+          </h2>
+          <p className="text-gray-700 mb-8 leading-relaxed">
+            This application allows you to record audio, automatically transcribe
+            it, translate to different languages, and generate summaries using
+            advanced AI technology.
+          </p>
+          <div className="space-y-4">
+            <Button
+              onClick={() => setLocation("/audio")}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-lg"
+            >
+              Start Processing Audio
+            </Button>
+          </div>
+        </div>
       </main>
     </div>
   );
 }
+
