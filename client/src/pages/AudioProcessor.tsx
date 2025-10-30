@@ -1,10 +1,21 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
+import { useLocation } from "wouter";
+import {
+  Mic,
+  Square,
+  Copy,
+  Download,
+  Volume2,
+  Loader,
+  ArrowLeft,
+} from "lucide-react";
 
 export default function AudioProcessor() {
+  const [, setLocation] = useLocation();
   const [isRecording, setIsRecording] = useState(false);
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const [transcription, setTranscription] = useState("");
@@ -14,12 +25,20 @@ export default function AudioProcessor() {
   const [summaryType, setSummaryType] = useState<"short" | "medium" | "detailed">(
     "medium"
   );
+  const [recordingTime, setRecordingTime] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const transcribeMutation = trpc.audio.transcribe.useMutation();
   const translateMutation = trpc.audio.translate.useMutation();
   const summarizeMutation = trpc.audio.summarize.useMutation();
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
 
   const startRecording = async () => {
     try {
@@ -29,6 +48,7 @@ export default function AudioProcessor() {
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       setAudioChunks([]);
+      setRecordingTime(0);
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -38,6 +58,10 @@ export default function AudioProcessor() {
 
       mediaRecorder.start();
       setIsRecording(true);
+
+      timerRef.current = setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
     } catch (error) {
       console.error("Error accessing microphone:", error);
       alert("マイクへのアクセスが拒否されました。");
@@ -48,6 +72,8 @@ export default function AudioProcessor() {
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+
+      if (timerRef.current) clearInterval(timerRef.current);
 
       mediaRecorderRef.current.onstop = async () => {
         const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
@@ -62,12 +88,10 @@ export default function AudioProcessor() {
 
   const processAudio = async (audioBlob: Blob) => {
     try {
-      // Convert blob to base64
       const reader = new FileReader();
       reader.onload = async () => {
         const base64Audio = (reader.result as string).split(",")[1];
 
-        // Transcribe
         const transcribeResult = await transcribeMutation.mutateAsync({
           audioData: base64Audio,
           language: "ja",
@@ -110,7 +134,6 @@ export default function AudioProcessor() {
       const result = await summarizeMutation.mutateAsync({
         transcript: transcription,
         summaryType: summaryType,
-        summaryLanguage: "ja",
       });
       setSummary(result.summary);
     } catch (error) {
@@ -119,137 +142,250 @@ export default function AudioProcessor() {
     }
   };
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert("コピーしました！");
+  };
+
+  const downloadAsJSON = () => {
+    const data = {
+      transcription,
+      translation,
+      summary,
+      targetLanguage,
+      summaryType,
+      timestamp: new Date().toISOString(),
+    };
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `speech-processor-${Date.now()}.json`;
+    a.click();
+  };
+
+  const speakText = (text: string) => {
+    if ("speechSynthesis" in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  const languages = [
+    { code: "en", name: "English" },
+    { code: "ja", name: "日本語" },
+    { code: "es", name: "Español" },
+    { code: "fr", name: "Français" },
+    { code: "de", name: "Deutsch" },
+    { code: "zh", name: "中文" },
+    { code: "ko", name: "한국어" },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-indigo-50 p-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-bold text-center text-gray-800 mb-2">
-          AI Speech Processor
-        </h1>
-        <p className="text-center text-gray-600 mb-8">
-          音声を録音して、トランスクリプション、翻訳、要約を自動生成します
-        </p>
-
-        {/* Recording Section */}
-        <Card className="mb-8 p-6 bg-white shadow-lg">
-          <h2 className="text-2xl font-semibold mb-4 text-gray-800">
-            ステップ 1: 音声録音
-          </h2>
-          <div className="flex gap-4 mb-4">
-            <Button
-              onClick={startRecording}
-              disabled={isRecording}
-              className="bg-red-500 hover:bg-red-600"
-            >
-              {isRecording ? "録音中..." : "録音開始"}
-            </Button>
-            <Button
-              onClick={stopRecording}
-              disabled={!isRecording}
-              className="bg-gray-500 hover:bg-gray-600"
-            >
-              録音停止
-            </Button>
+    <div className="min-h-screen bg-gradient-to-br from-purple-600 via-purple-500 to-indigo-600">
+      {/* Header */}
+      <header className="border-b border-white/10 backdrop-blur-md bg-white/5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Button
+                onClick={() => setLocation("/")}
+                variant="ghost"
+                size="icon"
+                className="text-white hover:bg-white/10"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+              <h1 className="text-2xl font-bold text-white">Audio Processor</h1>
+            </div>
           </div>
-          {isRecording && (
-            <p className="text-red-500 font-semibold">● 録音中...</p>
-          )}
-        </Card>
+        </div>
+      </header>
 
-        {/* Transcription Section */}
-        {transcription && (
-          <Card className="mb-8 p-6 bg-white shadow-lg">
-            <h2 className="text-2xl font-semibold mb-4 text-gray-800">
-              ステップ 2: トランスクリプション
-            </h2>
-            <Textarea
-              value={transcription}
-              onChange={(e) => setTranscription(e.target.value)}
-              className="w-full h-32 p-4 border border-gray-300 rounded-lg"
-              placeholder="トランスクリプションがここに表示されます"
-            />
-          </Card>
-        )}
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Recording Section */}
+          <div className="lg:col-span-1">
+            <Card className="bg-white/10 backdrop-blur-md border-white/20 p-6">
+              <h2 className="text-xl font-bold text-white mb-6">音声録音</h2>
 
-        {/* Translation Section */}
-        <Card className="mb-8 p-6 bg-white shadow-lg">
-          <h2 className="text-2xl font-semibold mb-4 text-gray-800">
-            ステップ 3: 翻訳
-          </h2>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              翻訳先言語
-            </label>
-            <select
-              value={targetLanguage}
-              onChange={(e) => setTargetLanguage(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg"
-            >
-              <option value="en">English</option>
-              <option value="ja">日本語</option>
-              <option value="es">Español</option>
-              <option value="fr">Français</option>
-              <option value="de">Deutsch</option>
-              <option value="zh">中文</option>
-              <option value="ko">한국어</option>
-            </select>
+              <div className="space-y-4">
+                {/* Recording Timer */}
+                {isRecording && (
+                  <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4 text-center">
+                    <div className="text-3xl font-bold text-red-400">
+                      {Math.floor(recordingTime / 60)}:
+                      {String(recordingTime % 60).padStart(2, "0")}
+                    </div>
+                    <p className="text-red-300 text-sm mt-2">録音中...</p>
+                  </div>
+                )}
+
+                {/* Record Button */}
+                <Button
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className={`w-full py-6 text-lg font-semibold rounded-lg transition-all ${
+                    isRecording
+                      ? "bg-red-500 hover:bg-red-600 text-white"
+                      : "bg-white text-purple-600 hover:bg-white/90"
+                  }`}
+                  disabled={transcribeMutation.isPending}
+                >
+                  {isRecording ? (
+                    <>
+                      <Square className="w-5 h-5 mr-2" />
+                      停止
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="w-5 h-5 mr-2" />
+                      録音開始
+                    </>
+                  )}
+                </Button>
+
+                {/* Loading State */}
+                {transcribeMutation.isPending && (
+                  <div className="bg-blue-500/20 border border-blue-500/50 rounded-lg p-4 text-center">
+                    <Loader className="w-5 h-5 animate-spin text-blue-400 mx-auto mb-2" />
+                    <p className="text-blue-300 text-sm">処理中...</p>
+                  </div>
+                )}
+              </div>
+            </Card>
           </div>
-          <Button
-            onClick={handleTranslate}
-            disabled={!transcription || translateMutation.isPending}
-            className="bg-blue-500 hover:bg-blue-600 mb-4"
-          >
-            {translateMutation.isPending ? "翻訳中..." : "翻訳"}
-          </Button>
-          {translation && (
-            <Textarea
-              value={translation}
-              readOnly
-              className="w-full h-32 p-4 border border-gray-300 rounded-lg bg-gray-50"
-              placeholder="翻訳結果がここに表示されます"
-            />
-          )}
-        </Card>
 
-        {/* Summary Section */}
-        <Card className="mb-8 p-6 bg-white shadow-lg">
-          <h2 className="text-2xl font-semibold mb-4 text-gray-800">
-            ステップ 4: 要約
-          </h2>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              要約タイプ
-            </label>
-            <select
-              value={summaryType}
-              onChange={(e) =>
-                setSummaryType(
-                  e.target.value as "short" | "medium" | "detailed"
-                )
-              }
-              className="w-full p-2 border border-gray-300 rounded-lg"
-            >
-              <option value="short">短い (4-5行)</option>
-              <option value="medium">中程度 (3-4段落)</option>
-              <option value="detailed">詳細 (複数セクション)</option>
-            </select>
+          {/* Content Sections */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Transcription */}
+            <Card className="bg-white/10 backdrop-blur-md border-white/20 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-white">トランスクリプション</h2>
+                {transcription && (
+                  <Button
+                    onClick={() => copyToClipboard(transcription)}
+                    variant="ghost"
+                    size="sm"
+                    className="text-white/70 hover:text-white"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+              <Textarea
+                value={transcription}
+                readOnly
+                placeholder="録音してください..."
+                className="bg-white/5 border-white/20 text-white placeholder-white/50 min-h-24"
+              />
+            </Card>
+
+            {/* Translation */}
+            <Card className="bg-white/10 backdrop-blur-md border-white/20 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-white">翻訳</h2>
+                <div className="flex gap-2">
+                  <select
+                    value={targetLanguage}
+                    onChange={(e) => setTargetLanguage(e.target.value)}
+                    className="bg-white/10 border border-white/20 text-white rounded px-3 py-1 text-sm"
+                  >
+                    {languages.map((lang) => (
+                      <option key={lang.code} value={lang.code} className="bg-purple-900">
+                        {lang.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    onClick={handleTranslate}
+                    disabled={!transcription || translateMutation.isPending}
+                    className="bg-white/20 hover:bg-white/30 text-white text-sm"
+                  >
+                    {translateMutation.isPending ? (
+                      <Loader className="w-4 h-4 animate-spin" />
+                    ) : (
+                      "翻訳"
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <Textarea
+                value={translation}
+                readOnly
+                placeholder="翻訳結果がここに表示されます..."
+                className="bg-white/5 border-white/20 text-white placeholder-white/50 min-h-24"
+              />
+            </Card>
+
+            {/* Summary */}
+            <Card className="bg-white/10 backdrop-blur-md border-white/20 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-white">要約</h2>
+                <div className="flex gap-2">
+                  <select
+                    value={summaryType}
+                    onChange={(e) =>
+                      setSummaryType(e.target.value as "short" | "medium" | "detailed")
+                    }
+                    className="bg-white/10 border border-white/20 text-white rounded px-3 py-1 text-sm"
+                  >
+                    <option value="short" className="bg-purple-900">
+                      短
+                    </option>
+                    <option value="medium" className="bg-purple-900">
+                      中
+                    </option>
+                    <option value="detailed" className="bg-purple-900">
+                      詳細
+                    </option>
+                  </select>
+                  <Button
+                    onClick={handleSummarize}
+                    disabled={!transcription || summarizeMutation.isPending}
+                    className="bg-white/20 hover:bg-white/30 text-white text-sm"
+                  >
+                    {summarizeMutation.isPending ? (
+                      <Loader className="w-4 h-4 animate-spin" />
+                    ) : (
+                      "生成"
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <Textarea
+                value={summary}
+                readOnly
+                placeholder="要約がここに表示されます..."
+                className="bg-white/5 border-white/20 text-white placeholder-white/50 min-h-24"
+              />
+            </Card>
+
+            {/* Action Buttons */}
+            {(transcription || translation || summary) && (
+              <div className="flex gap-4">
+                <Button
+                  onClick={downloadAsJSON}
+                  className="flex-1 bg-white/20 hover:bg-white/30 text-white"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  ダウンロード
+                </Button>
+                {translation && (
+                  <Button
+                    onClick={() => speakText(translation)}
+                    className="flex-1 bg-white/20 hover:bg-white/30 text-white"
+                  >
+                    <Volume2 className="w-4 h-4 mr-2" />
+                    再生
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
-          <Button
-            onClick={handleSummarize}
-            disabled={!transcription || summarizeMutation.isPending}
-            className="bg-green-500 hover:bg-green-600 mb-4"
-          >
-            {summarizeMutation.isPending ? "要約中..." : "要約生成"}
-          </Button>
-          {summary && (
-            <Textarea
-              value={summary}
-              readOnly
-              className="w-full h-48 p-4 border border-gray-300 rounded-lg bg-gray-50"
-              placeholder="要約がここに表示されます"
-            />
-          )}
-        </Card>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }
