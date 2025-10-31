@@ -115,7 +115,8 @@ export const appRouter = router({
           );
 
           if (!transcription) {
-            throw new Error("Failed to transcribe audio");
+            console.error("[TRANSCRIBE] Transcription returned null or empty");
+            throw new Error("Failed to transcribe audio. Please check Deepgram API configuration.");
           }
 
           console.log(

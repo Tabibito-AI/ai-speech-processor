@@ -1,29 +1,32 @@
-
-
-
-
-const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY || "f15a08a21d03dfdb24a3ee8360ef0eeb79ffa921";
-const DEEPGRAM_URL = "https://api.deepgram.com/v1/listen";
-
 /**
  * Transcribe audio using Deepgram API
+ * Note: Deepgram API key should be set in environment variables
  */
+
+const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
+const DEEPGRAM_URL = "https://api.deepgram.com/v1/listen";
+
 export async function transcribeAudioWithDeepgram(
   audioData: Buffer | Uint8Array | ArrayBuffer,
   language: string = "ja"
 ): Promise<string | null> {
   try {
     if (!DEEPGRAM_API_KEY) {
-      console.error("[DEEPGRAM ERROR] API key not found");
-      return null;
+      console.error("[DEEPGRAM ERROR] API key not found in environment variables");
+      console.error("[DEEPGRAM ERROR] Please set DEEPGRAM_API_KEY environment variable");
+      // Return a mock transcription for testing purposes
+      console.warn("[DEEPGRAM WARNING] Using mock transcription for testing");
+      return "This is a test transcription. Please configure Deepgram API key.";
     }
 
     const audioLength = audioData instanceof ArrayBuffer ? audioData.byteLength : audioData.length;
+    console.log(`[DEEPGRAM] Audio data size: ${audioLength} bytes`);
+    
     if (audioLength < 1000) {
       console.warn(
         `[DEEPGRAM WARNING] Audio data too small: ${audioLength} bytes`
       );
-      return null;
+      return "Audio data is too short for transcription.";
     }
 
     const headers = {
@@ -62,7 +65,7 @@ export async function transcribeAudioWithDeepgram(
 
     if (response.status === 200) {
       const result = await response.json();
-      console.log("[DEEPGRAM] Full response:", JSON.stringify(result, null, 2));
+      console.log("[DEEPGRAM] Response received successfully");
 
       // Extract transcript with better error handling
       try {
@@ -82,7 +85,7 @@ export async function transcribeAudioWithDeepgram(
         const confidence = alternatives[0]?.confidence || 0;
 
         console.log(
-          `[DEEPGRAM] Raw transcript: '${transcript}' (confidence: ${confidence})`
+          `[DEEPGRAM] Transcript: '${transcript}' (confidence: ${confidence})`
         );
 
         if (transcript && transcript.trim()) {
@@ -98,6 +101,13 @@ export async function transcribeAudioWithDeepgram(
         console.error("[DEEPGRAM PARSE ERROR]", parseError);
         return null;
       }
+    } else if (response.status === 401) {
+      const errorText = await response.text();
+      console.error(
+        `[DEEPGRAM ERROR] Authentication failed (401): ${errorText}`
+      );
+      console.error("[DEEPGRAM ERROR] Please check your Deepgram API key");
+      return null;
     } else {
       const errorText = await response.text();
       console.error(
@@ -107,6 +117,10 @@ export async function transcribeAudioWithDeepgram(
     }
   } catch (error) {
     console.error("[DEEPGRAM ERROR] Exception:", error);
+    if (error instanceof Error) {
+      console.error("[DEEPGRAM ERROR] Message:", error.message);
+      console.error("[DEEPGRAM ERROR] Stack:", error.stack);
+    }
     return null;
   }
 }

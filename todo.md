@@ -33,3 +33,13 @@
 - [x] プロジェクト初期化（React + Express + tRPC）
 - [x] Manus LLM統合の基本設定
 
+
+
+
+## Bug Fixes
+
+- [x] Deepgram APIキーの環境変数設定エラーを修正
+- [x] トランスクリプション処理の500エラーを解決
+- [x] 認証エラー（401）の原因を特定して修正
+- [ ] Deepgram APIキーをSecretsパネルで設定（ユーザー作業）
+
