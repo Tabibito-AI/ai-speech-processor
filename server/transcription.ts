@@ -14,20 +14,44 @@ export async function transcribeAudioWithDeepgram(
     if (!DEEPGRAM_API_KEY) {
       console.error("[DEEPGRAM ERROR] API key not found in environment variables");
       console.error("[DEEPGRAM ERROR] Please set DEEPGRAM_API_KEY environment variable");
-      // Return a mock transcription for testing purposes
-      console.warn("[DEEPGRAM WARNING] Using mock transcription for testing");
-      return "This is a test transcription. Please configure Deepgram API key.";
+      return null;
     }
 
-    const audioLength = audioData instanceof ArrayBuffer ? audioData.byteLength : audioData.length;
+    // Calculate audio data size
+    let audioLength = 0;
+    if (Buffer.isBuffer(audioData)) {
+      audioLength = audioData.length;
+    } else if (audioData instanceof Uint8Array) {
+      audioLength = audioData.length;
+    } else if (audioData instanceof ArrayBuffer) {
+      audioLength = audioData.byteLength;
+    } else {
+      audioLength = (audioData as any).length || 0;
+    }
+
     console.log(`[DEEPGRAM] Audio data size: ${audioLength} bytes`);
     
-    if (audioLength < 1000) {
+    // Minimum audio size: 100 bytes (very short audio)
+    if (audioLength < 100) {
       console.warn(
         `[DEEPGRAM WARNING] Audio data too small: ${audioLength} bytes`
       );
-      return "Audio data is too short for transcription.";
+      return null;
     }
+
+    // Convert to Buffer if needed
+    let bodyData: Buffer;
+    if (Buffer.isBuffer(audioData)) {
+      bodyData = audioData;
+    } else if (audioData instanceof Uint8Array) {
+      bodyData = Buffer.from(audioData);
+    } else if (audioData instanceof ArrayBuffer) {
+      bodyData = Buffer.from(audioData);
+    } else {
+      bodyData = Buffer.from(audioData as any);
+    }
+
+    console.log(`[DEEPGRAM] Final buffer size: ${bodyData.length} bytes`);
 
     const headers = {
       Authorization: `Token ${DEEPGRAM_API_KEY}`,
@@ -43,17 +67,7 @@ export async function transcribeAudioWithDeepgram(
     });
 
     console.log("[DEEPGRAM] Making API request...");
-
-    let bodyData: any;
-    if (Buffer.isBuffer(audioData)) {
-      bodyData = audioData;
-    } else if (audioData instanceof Uint8Array) {
-      bodyData = audioData;
-    } else if (audioData instanceof ArrayBuffer) {
-      bodyData = new Uint8Array(audioData);
-    } else {
-      bodyData = Buffer.from(audioData);
-    }
+    console.log(`[DEEPGRAM] URL: ${DEEPGRAM_URL}?${params.toString()}`);
 
     const response = await fetch(`${DEEPGRAM_URL}?${params.toString()}`, {
       method: "POST",
@@ -66,6 +80,7 @@ export async function transcribeAudioWithDeepgram(
     if (response.status === 200) {
       const result = await response.json();
       console.log("[DEEPGRAM] Response received successfully");
+      console.log("[DEEPGRAM] Response:", JSON.stringify(result).substring(0, 200));
 
       // Extract transcript with better error handling
       try {
