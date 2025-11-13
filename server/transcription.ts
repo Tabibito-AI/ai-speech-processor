@@ -1,6 +1,6 @@
 /**
  * Transcribe audio using Deepgram API
- * Note: Deepgram API key should be set in environment variables
+ * Note: Deepgram API key is hardcoded
  */
 
 const DEEPGRAM_API_KEY = "f15a08a21d03dfdb24a3ee8360ef0eeb79ffa921";
@@ -16,7 +16,7 @@ export async function transcribeAudioWithDeepgram(
 ): Promise<string | null> {
   try {
     if (!DEEPGRAM_API_KEY) {
-      console.error("[DEEPGRAM ERROR] API key not configured. Please set DEEPGRAM_API_KEY environment variable.");
+      console.error("[DEEPGRAM ERROR] API key not configured.");
       return null;
     }
 
@@ -53,27 +53,25 @@ export async function transcribeAudioWithDeepgram(
 
     console.log(`[DEEPGRAM] Final buffer size: ${bodyData.length} bytes`);
 
-    // Build query parameters - use proper encoding
+    // Build query parameters
     const params = new URLSearchParams({
-      model: "nova-2",  // Use nova-2 (more stable than nova-3)
+      model: "nova-2",
       language: language,
       punctuate: "true",
       smart_format: "true",
     });
 
     // Build headers with correct authentication format
-    // Deepgram expects: Authorization: Token <API_KEY>
     const headers: Record<string, string> = {
       "Authorization": `Token ${DEEPGRAM_API_KEY}`,
       "Content-Type": "audio/webm",
-      "User-Agent": "Node.js/Deepgram-Client",
     };
 
     const url = `${DEEPGRAM_URL}?${params.toString()}`;
-    console.log(`[DEEPGRAM] Making API request to: ${url}`);
-    console.log(`[DEEPGRAM] API Key length: ${DEEPGRAM_API_KEY.length}`);
+    console.log(`[DEEPGRAM] Request URL: ${url}`);
+    console.log(`[DEEPGRAM] Headers: Authorization: Token ${DEEPGRAM_API_KEY.substring(0, 10)}...`);
     console.log(`[DEEPGRAM] Content-Type: audio/webm`);
-    console.log(`[DEEPGRAM] Audio buffer size: ${bodyData.length} bytes`);
+    console.log(`[DEEPGRAM] Audio size: ${bodyData.length} bytes`);
 
     const response = await fetch(url, {
       method: "POST",
@@ -82,12 +80,10 @@ export async function transcribeAudioWithDeepgram(
     });
 
     console.log(`[DEEPGRAM] Response status: ${response.status}`);
-    console.log(`[DEEPGRAM] Response headers:`, response.headers);
 
     if (response.status === 200) {
       const result = await response.json();
       console.log("[DEEPGRAM] Response received successfully");
-      console.log("[DEEPGRAM] Response structure:", JSON.stringify(result).substring(0, 200));
 
       // Extract transcript with better error handling
       try {
@@ -123,45 +119,41 @@ export async function transcribeAudioWithDeepgram(
       const errorText = await response.text();
       console.error(`[DEEPGRAM ERROR] Authentication failed (401)`);
       console.error(`[DEEPGRAM ERROR] Response: ${errorText}`);
-      console.error(`[DEEPGRAM ERROR] API Key length: ${DEEPGRAM_API_KEY.length}`);
       console.error("[DEEPGRAM ERROR] Please verify your Deepgram API key is valid");
       return null;
     } else if (response.status === 400) {
       const errorText = await response.text();
       console.error(`[DEEPGRAM ERROR] Bad Request (400)`);
       console.error(`[DEEPGRAM ERROR] Response: ${errorText}`);
-      console.error(`[DEEPGRAM ERROR] This usually means the audio format is not supported`);
+      console.error("[DEEPGRAM ERROR] This usually means the audio format is not supported or parameters are invalid");
       try {
         const errorJson = JSON.parse(errorText);
         console.error(`[DEEPGRAM ERROR] Error details:`, errorJson);
       } catch (e) {
-        console.error(`[DEEPGRAM ERROR] Could not parse error as JSON`);
+        // Not JSON
       }
       return null;
     } else if (response.status === 500) {
       const errorText = await response.text();
       console.error(`[DEEPGRAM ERROR] Internal Server Error (500)`);
-      console.error(`[DEEPGRAM ERROR] API Key length: ${DEEPGRAM_API_KEY.length}`);
-      console.error(`[DEEPGRAM ERROR] Content-Type: audio/webm`);
-      console.error(`[DEEPGRAM ERROR] Audio size: ${bodyData.length} bytes`);
       console.error(`[DEEPGRAM ERROR] Response: ${errorText}`);
+      console.error(`[DEEPGRAM ERROR] Audio size: ${bodyData.length} bytes`);
       try {
         const errorJson = JSON.parse(errorText);
         console.error(`[DEEPGRAM ERROR] Error details:`, errorJson);
       } catch (e) {
-        console.error(`[DEEPGRAM ERROR] Could not parse error as JSON`);
+        // Not JSON
       }
       return null;
     } else {
       const errorText = await response.text();
       console.error(`[DEEPGRAM ERROR] Status: ${response.status}`);
       console.error(`[DEEPGRAM ERROR] Response: ${errorText}`);
-      console.error(`[DEEPGRAM ERROR] Response length: ${errorText.length}`);
       try {
         const errorJson = JSON.parse(errorText);
         console.error(`[DEEPGRAM ERROR] Error JSON:`, errorJson);
       } catch (e) {
-        console.error(`[DEEPGRAM ERROR] Could not parse error as JSON`);
+        // Not JSON
       }
       return null;
     }
